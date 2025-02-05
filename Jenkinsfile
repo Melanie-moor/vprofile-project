@@ -1,12 +1,12 @@
 def COLOR_MAP = [
-    'SUCCESS': 'good'
+    'SUCCESS': 'good', 
     'FAILURE': 'danger',
 ]
 pipeline {
     agent any
     tools {
         maven "MAVEN3"
-        jdk "OracleJDK8"
+        jdk "OracleJDK11"
     }
     
     environment {
@@ -15,12 +15,15 @@ pipeline {
 		NEXUS_PASS = 'admin123'
 		RELEASE_REPO = 'vprofile-release'
 		CENTRAL_REPO = 'vpro-maven-central'
-		NEXUSIP = '172.31.3.186'
+		NEXUSIP = '54.81.191.221'
 		NEXUSPORT = '8081'
 		NEXUS_GRP_REPO = 'vpro-maven-group'
         NEXUS_LOGIN = 'nexuslogin'
-	SONARSERVER = 'sonarserver'
-	SONARSCANNER = 'sonarscanner'
+        SONARSERVER = 'sonarserver'
+        SONARSCANNER = 'sonarscanner'
+        registryCredential = 'ecr:us-east-1:awscreds'
+        appRegistry = '763563202622.dkr.ecr.us-east-1.amazonaws.com/vprofileappimg'
+        vprofileRegistry = "https://763563202622.dkr.ecr.us-east-1.amazonaws.com"
     }
 
     stages {
@@ -28,8 +31,8 @@ pipeline {
             steps {
                 sh 'mvn -s settings.xml -DskipTests install'
             }
-	    post {
-		success {
+            post {
+                success {
                     echo "Now Archiving."
                     archiveArtifacts artifacts: '**/*.war'
                 }
@@ -97,6 +100,24 @@ pipeline {
             }
         }
 
+        stage('Build App Image') {
+            steps {
+                script {
+                    dockerImage = docker.build( appRegistry + ":$BUILD_NUMBER", "./Docker-files/app/multistage/")
+                }
+            }
+        }
+        
+        stage('Upload App Image') {
+          steps{
+            script {
+              docker.withRegistry( vprofileRegistry, registryCredential ) {
+                dockerImage.push("$BUILD_NUMBER")
+                dockerImage.push('latest')
+              }
+            }
+          }
+        }
     }
     post {
         always {
